@@ -14,7 +14,15 @@ creds = Credentials(
 
 youtube = build("youtube", "v3", credentials=creds)
 
-video_path = "videos/short.mp4"
+import os
+import random
+
+videos = [f for f in os.listdir("videos") if f.lower().endswith(".mp4")]
+
+if not videos:
+    raise Exception("No MP4 videos found in videos folder")
+
+video_path = os.path.join("videos", random.choice(videos))
 
 media = MediaFileUpload(video_path, mimetype="video/mp4", resumable=True)
 
