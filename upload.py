@@ -1,8 +1,10 @@
 import os
+import random
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 from googleapiclient.http import MediaFileUpload
 
+# ---------- AUTH ----------
 creds = Credentials(
     None,
     refresh_token=os.environ["YOUTUBE_REFRESH_TOKEN"],
@@ -14,17 +16,28 @@ creds = Credentials(
 
 youtube = build("youtube", "v3", credentials=creds)
 
-import os
-import random
+# ---------- PICK RANDOM VIDEO ----------
+VIDEOS_DIR = "videos"
 
-videos = [f for f in os.listdir("videos") if f.lower().endswith(".mp4")]
+videos = [
+    f for f in os.listdir(VIDEOS_DIR)
+    if f.lower().endswith(".mp4")
+]
 
 if not videos:
     raise Exception("No MP4 videos found in videos folder")
 
-video_path = os.path.join("videos", random.choice(videos))
+video_file = random.choice(videos)
+video_path = os.path.join(VIDEOS_DIR, video_file)
 
-media = MediaFileUpload(video_path, mimetype="video/mp4", resumable=True)
+print(f"Uploading: {video_file}")
+
+# ---------- UPLOAD ----------
+media = MediaFileUpload(
+    video_path,
+    mimetype="video/mp4",
+    resumable=True
+)
 
 request = youtube.videos().insert(
     part="snippet,status",
@@ -44,4 +57,11 @@ request = youtube.videos().insert(
 )
 
 response = request.execute()
-print("Uploaded:", response["id"])
+
+video_id = response.get("id")
+print("Uploaded:", video_id)
+
+# ---------- DELETE AFTER SUCCESS ----------
+if video_id:
+    os.remove(video_path)
+    print(f"Deleted local file: {video_file}")
