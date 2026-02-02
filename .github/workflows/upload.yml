@@ -3,7 +3,7 @@ name: Upload YouTube Short
 on:
   workflow_dispatch:
   schedule:
-    - cron: '41 10 * * *'
+    - cron: '30 14 * * *'
 
 jobs:
   upload:
