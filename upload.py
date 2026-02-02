@@ -1,5 +1,6 @@
 import os
 import random
+import subprocess
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 from googleapiclient.http import MediaFileUpload
@@ -61,7 +62,16 @@ response = request.execute()
 video_id = response.get("id")
 print("Uploaded:", video_id)
 
-# ---------- DELETE AFTER SUCCESS ----------
+# ---------- DELETE + COMMIT AFTER SUCCESS ----------
 if video_id:
     os.remove(video_path)
     print(f"Deleted local file: {video_file}")
+
+    # Configure git (GitHub Actions environment)
+    subprocess.run(["git", "config", "--global", "user.email", "actions@github.com"])
+    subprocess.run(["git", "config", "--global", "user.name", "GitHub Actions"])
+
+    # Commit deletion back to repo
+    subprocess.run(["git", "add", "videos"])
+    subprocess.run(["git", "commit", "-m", f"Delete uploaded video: {video_file}"])
+    subprocess.run(["git", "push"])
