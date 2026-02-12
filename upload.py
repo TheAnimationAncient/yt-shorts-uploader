@@ -1,57 +1,84 @@
 import os
+import io
 import random
-import subprocess
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload, MediaFileUpload
 from google.oauth2.credentials import Credentials
-from googleapiclient.http import MediaFileUpload
 
-# ---------- AUTH ----------
+# ==============================
+# GOOGLE DRIVE FOLDER IDS
+# ==============================
+
+PENDING_FOLDER_ID = "1TY8cOb7sOxIEVyGubEEhHJqvtmd0sLB3"
+UPLOADED_FOLDER_ID = "1KjiEUcZLiPWknc0x7x3hZwJ4Jat-Lig-"
+
+# ==============================
+# AUTHENTICATION
+# ==============================
+
 creds = Credentials(
     None,
     refresh_token=os.environ["YOUTUBE_REFRESH_TOKEN"],
     token_uri="https://oauth2.googleapis.com/token",
     client_id=os.environ["YOUTUBE_CLIENT_ID"],
     client_secret=os.environ["YOUTUBE_CLIENT_SECRET"],
-    scopes=["https://www.googleapis.com/auth/youtube.upload"]
+    scopes=[
+        "https://www.googleapis.com/auth/youtube.upload",
+        "https://www.googleapis.com/auth/drive"
+    ]
 )
 
 youtube = build("youtube", "v3", credentials=creds)
+drive = build("drive", "v3", credentials=creds)
 
-# ---------- PICK RANDOM VIDEO ----------
-VIDEOS_DIR = "videos"
+# ==============================
+# GET MP4 FILES FROM PENDING FOLDER
+# ==============================
 
-videos = [
-    f for f in os.listdir(VIDEOS_DIR)
-    if f.lower().endswith(".mp4")
-]
+results = drive.files().list(
+    q=f"'{PENDING_FOLDER_ID}' in parents and mimeType='video/mp4'",
+    fields="files(id, name)"
+).execute()
 
-if not videos:
-    raise Exception("No MP4 videos found in videos folder")
+files = results.get("files", [])
 
-video_file = random.choice(videos)
-video_path = os.path.join(VIDEOS_DIR, video_file)
+if not files:
+    raise Exception("No MP4 videos found in pending folder")
 
-print(f"Uploading: {video_file}")
+video = random.choice(files)
+file_id = video["id"]
+file_name = video["name"]
 
-# ---------- UPLOAD ----------
-media = MediaFileUpload(
-    video_path,
-    mimetype="video/mp4",
-    resumable=True
-)
+print("Downloading:", file_name)
+
+# ==============================
+# DOWNLOAD FILE FROM DRIVE
+# ==============================
+
+request = drive.files().get_media(fileId=file_id)
+fh = io.FileIO(file_name, "wb")
+downloader = MediaIoBaseDownload(fh, request)
+
+done = False
+while not done:
+    status, done = downloader.next_chunk()
+
+# ==============================
+# UPLOAD TO YOUTUBE
+# ==============================
+
+media = MediaFileUpload(file_name, mimetype="video/mp4", resumable=True)
 
 request = youtube.videos().insert(
     part="snippet,status",
     body={
         "snippet": {
-            "title": "Cute AI Cat 😻",
-            "description": "Cute AI cat animation 🐱✨ #shorts",
-            "tags": ["cat", "aicat", "shorts"],
+            "title": file_name,
+            "description": "#shorts",
             "categoryId": "15"
         },
         "status": {
-            "privacyStatus": "public",
-            "selfDeclaredMadeForKids": False
+            "privacyStatus": "public"
         }
     },
     media_body=media
@@ -62,16 +89,20 @@ response = request.execute()
 video_id = response.get("id")
 print("Uploaded:", video_id)
 
-# ---------- DELETE + COMMIT AFTER SUCCESS ----------
-if video_id:
-    os.remove(video_path)
-    print(f"Deleted local file: {video_file}")
+# ==============================
+# MOVE FILE TO UPLOADED FOLDER
+# ==============================
 
-    # Configure git (GitHub Actions environment)
-    subprocess.run(["git", "config", "--global", "user.email", "actions@github.com"])
-    subprocess.run(["git", "config", "--global", "user.name", "GitHub Actions"])
+drive.files().update(
+    fileId=file_id,
+    addParents=UPLOADED_FOLDER_ID,
+    removeParents=PENDING_FOLDER_ID
+).execute()
 
-    # Commit deletion back to repo
-    subprocess.run(["git", "add", "videos"])
-    subprocess.run(["git", "commit", "-m", f"Delete uploaded video: {video_file}"])
-    subprocess.run(["git", "push"])
+# ==============================
+# DELETE LOCAL TEMP FILE
+# ==============================
+
+os.remove(file_name)
+
+print("Moved to uploaded folder and cleaned local file.")
