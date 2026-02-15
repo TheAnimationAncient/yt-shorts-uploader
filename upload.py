@@ -1,6 +1,7 @@
 import os
 import io
 import random
+import time
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload, MediaFileUpload
 from google.oauth2.credentials import Credentials
@@ -13,7 +14,7 @@ PENDING_FOLDER_ID = "1TY8cOb7sOxIEVyGubEEhHJqvtmd0sLB3"
 UPLOADED_FOLDER_ID = "1KjiEUcZLiPWknc0x7x3hZwJ4Jat-Lig-"
 
 # ==============================
-# AUTHENTICATION
+# AUTH
 # ==============================
 
 creds = Credentials(
@@ -32,7 +33,7 @@ youtube = build("youtube", "v3", credentials=creds)
 drive = build("drive", "v3", credentials=creds)
 
 # ==============================
-# GET MP4 FILES FROM PENDING FOLDER
+# GET MP4 FILES FROM PENDING
 # ==============================
 
 results = drive.files().list(
@@ -49,10 +50,13 @@ video = random.choice(files)
 file_id = video["id"]
 file_name = video["name"]
 
+# Remove .mp4 from title
+title = file_name.replace(".mp4", "")
+
 print("Downloading:", file_name)
 
 # ==============================
-# DOWNLOAD FILE FROM DRIVE
+# DOWNLOAD FROM DRIVE
 # ==============================
 
 request = drive.files().get_media(fileId=file_id)
@@ -73,7 +77,7 @@ request = youtube.videos().insert(
     part="snippet,status",
     body={
         "snippet": {
-            "title": file_name,
+            "title": title,
             "description": "#shorts",
             "categoryId": "15"
         },
@@ -100,9 +104,9 @@ drive.files().update(
 ).execute()
 
 # ==============================
-# DELETE LOCAL TEMP FILE
+# DELETE LOCAL FILE
 # ==============================
 
 os.remove(file_name)
 
-print("Moved to uploaded folder and cleaned local file.")
+print("Moved and cleaned:", file_name)
